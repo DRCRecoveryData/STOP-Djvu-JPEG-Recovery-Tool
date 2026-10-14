@@ -1,5 +1,7 @@
 # STOP/Djvu JPEG Recovery Tool
 
+<img width="2444" height="1704" alt="image" src="https://github.com/user-attachments/assets/94d47004-cc14-4b1b-b9d7-45670c97db05" />
+
 Recover JPEG photos encrypted by **STOP/Djvu ransomware** using a same-camera clean JPEG as a decoder warm-up reference.
 
 > **⚠️ Not a decryption tool.** Full decryption requires the attacker's RSA private key. This tool exploits a specific weakness: STOP/Djvu only encrypts the **first 153,605 bytes** of files under 50 MB. The rest is untouched JPEG scan data. By splicing a same-camera reference's warm-up bytes with the surviving data, we can decode and recover the majority of the image.
