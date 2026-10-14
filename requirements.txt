@@ -1,0 +1,15 @@
+# STOP/Djvu JPEG Recovery Tool - Python dependencies
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Or in a virtual environment:
+#   python3 -m venv venv
+#   source venv/bin/activate
+#   pip install -r requirements.txt
+
+# Image decoding and manipulation
+Pillow>=10.0.0
+
+# Array operations for image processing
+numpy>=1.24.0
