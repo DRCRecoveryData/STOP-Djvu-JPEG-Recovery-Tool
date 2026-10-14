@@ -1,101 +1,114 @@
-# STOP/Djvu JPEG Recovery Tool
+# STOP/Djvu JPEG Recovery Tool — PyQt6 GUI
 
-<img width="2444" height="1704" alt="image" src="https://github.com/user-attachments/assets/94d47004-cc14-4b1b-b9d7-45670c97db05" />
+A graphical recovery tool for JPEG photos encrypted by **STOP/Djvu ransomware**, using a same-camera clean JPEG as a decoder warm-up reference.
 
-Recover JPEG photos encrypted by **STOP/Djvu ransomware** using a same-camera clean JPEG as a decoder warm-up reference.
+![Python](https://img.shields.io/badge/python-3.10+-blue)
+![PyQt6](https://img.shields.io/badge/PyQt6-6.5+-green)
+![License](https://img.shields.io/badge/license-MIT-orange)
 
-> **⚠️ Not a decryption tool.** Full decryption requires the attacker's RSA private key. This tool exploits a specific weakness: STOP/Djvu only encrypts the **first 153,605 bytes** of files under 50 MB. The rest is untouched JPEG scan data. By splicing a same-camera reference's warm-up bytes with the surviving data, we can decode and recover the majority of the image.
+> **⚠️ Not a decryption tool.** Full decryption requires the attacker's RSA private key. This tool exploits STOP/Djvu's fixed encryption boundary (153,605 bytes for files under 50 MB) to recover the majority of an encrypted image.
 
 ---
 
 ## 📋 Table of Contents
 
-- [How It Works](#-how-it-works)
+- [Features](#-features)
+- [Screenshots](#-screenshots)
 - [Requirements](#-requirements)
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
-- [Usage](#-usage)
-- [Parameters Reference](#-parameters-reference)
-- [Pipeline Explained](#-pipeline-explained)
-- [Auto-Detection](#-auto-detection)
-- [Batch Processing](#-batch-processing)
+- [GUI Walkthrough](#-gui-walkthrough)
+- [Parameter Reference](#-parameter-reference)
+- [Batch Mode](#-batch-mode)
+- [How It Works](#-how-it-works)
 - [Troubleshooting](#-troubleshooting)
 - [Compatibility](#-compatibility)
 - [Case Studies](#-case-studies)
-- [Technical Background](#-technical-background)
 - [Security Checklist](#-security-checklist)
+- [Technical Background](#-technical-background)
 - [License](#-license)
 
 ---
 
-## 🧠 How It Works
+## ✨ Features
 
-STOP/Djvu ransomware encrypts files with a predictable pattern:
-
-| File size | Bytes encrypted (from start) |
+| Feature | Description |
 |---|---|
-| **< 50 MB** | 153,605 bytes |
-| **≥ 50 MB** | 5,242,880 bytes (5 MB) |
+| **Non-blocking UI** | Recovery runs in a worker thread — interface stays responsive |
+| **Live preview** | Reference and recovered output shown side-by-side |
+| **Color-coded log** | Step-by-step pipeline progress in a dedicated tab |
+| **Auto-detect** | MCU size and encryption boundary detected automatically |
+| **Batch mode** | Process an entire folder of `.nppp` files |
+| **All parameters adjustable** | Crops, shift, WB, clarity, saturation — via spinboxes |
+| **Dark theme** | Eye-friendly, easy on long sessions |
+| **Cross-platform** | Linux, macOS, Windows |
+| **Reset to defaults** | One click restores known-good parameter set |
 
-### What Survives
+---
 
-- The 4-byte JPEG header (`FF D8 FF E1`)
-- All scan data **after** the encrypted boundary
+## 🖼 Screenshots
 
-### The Problem
-
-JPEG decoders cannot start mid-stream. They need valid Huffman-coded MCUs at the beginning to establish DC prediction state and bit alignment.
-
-### The Solution
-
-Splice the first 153,605 bytes of a **clean same-camera reference JPEG** onto the encrypted file's surviving data:
-
-```
-[reference 0:153605]  +  [encrypted 153605:end]
-      (warm-up)               (surviving data)
-             ↓
-      Decodable JPEG
-             ↓
-      Crop + align + color-correct
-             ↓
-      Recovered photo
-```
-
-The decoder warms up on valid reference content, then continues seamlessly into the recovered data.
+<img width="2444" height="1704" alt="image" src="https://github.com/user-attachments/assets/26821dc9-34c5-4286-a181-5cbbe02829e0" />
 
 ---
 
 ## 📦 Requirements
 
 - **Python 3.10+**
-- **Pillow** — JPEG decoding
+- **PyQt6** — GUI framework
+- **Pillow** — JPEG decoding and image manipulation
 - **NumPy** — array operations
-
-Optional:
-- **libjpeg-turbo-progs** — provides `djpeg` fallback (`sudo apt install libjpeg-turbo-progs`)
 
 ---
 
 ## 🔧 Installation
 
-### Option 1: Virtual environment (recommended)
+### 1. Create a virtual environment
 
 ```bash
+cd ~/Pictures
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate     # Linux/macOS
+# venv\Scripts\activate      # Windows
+```
+
+### 2. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Option 2: System install (Ubuntu 24.04+ requires venv)
+### 3. Run the GUI
 
 ```bash
-pip install --break-system-packages -r requirements.txt
+python3 recover_gui.py
 ```
 
-### Option 3: apt (dependencies only)
+### Ubuntu 24.04+ — Faster install (avoids slow PyQt6 download)
 
 ```bash
-sudo apt install python3-pil python3-numpy
+# Install PyQt6 and image libraries system-wide
+sudo apt install python3-pyqt6 python3-numpy python3-pil
+
+# Reuse system packages in venv
+python3 -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r requirements.txt   # only installs what's missing
+```
+
+### Linux — Missing Qt platform plugin
+
+If you see `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`:
+
+```bash
+sudo apt install libxcb-cursor0 libxcb-xinerama0
+```
+
+On Wayland:
+
+```bash
+export QT_QPA_PLATFORM=wayland
+python3 recover_gui.py
 ```
 
 ---
@@ -103,243 +116,209 @@ sudo apt install python3-pil python3-numpy
 ## 🚀 Quick Start
 
 ```bash
-python3 recover.py encrypted.nppp reference.JPG output.jpg
+cd ~/Pictures
+source venv/bin/activate
+python3 recover_gui.py
 ```
 
-**Real example:**
+Then in the GUI:
 
-```bash
-python3 recover.py _NHL0591.JPG.nppp _NHL0592.JPG _NHL0591_RECOVERED.jpg
-```
-
-### Prerequisites
-
-1. **The encrypted file** — e.g., `_NHL0591.JPG.nppp`, `IMG_4054.JPG.nppp`
-2. **A clean same-camera JPEG** — must be from the **same camera model**. Ideally shot in the same session.
-3. **(Optional) The ransom note** — `_readme.txt` contains the Personal ID (for offline-key lookup)
+1. **Encrypted file** → browse to `_NHL0591.JPG.nppp`
+2. **Reference** → browse to `_NHL0592.JPG`
+3. **Output** → auto-filled, adjust if needed
+4. Click **▶ Run Recovery**
+5. Check the **Log** tab for progress
+6. View result in the **Preview** tab
 
 ---
 
-## 📖 Usage
+## 🖥 GUI Walkthrough
 
-### Single File
+### Files Section (top)
 
-```bash
-python3 recover.py <encrypted> <reference> <output>
-```
+| Field | Purpose |
+|---|---|
+| **Encrypted file** | The `.nppp` / `.djvu` / `.gero` / `.nnuz` / `.bbbb` file to recover |
+| **Reference** | A clean same-camera JPEG (must be different photo, same device) |
+| **Output** | Where to save the recovered image (auto-filled as `<name>_RECOVERED.jpg`) |
 
-### With Manual Parameters
+### Parameters Panel (left)
 
-```bash
-python3 recover.py IMG_4054.JPG.nppp IMG_4312.JPG out.jpg \
-    --mcu-size 16 \
-    --crop-top 600 \
-    --crop-bottom 90 \
-    --shift 16
-```
+#### Auto-Detection Group
 
-### Skip Auto-Detection
+| Option | Default | Description |
+|---|---|---|
+| **Enable auto-detection** | ✅ On | Detects `ref_prefix` (from file size) and `MCU size` (from reference SOF marker) |
+| **Apply half-swap** | ✅ On | Swaps left/right halves to correct composition |
 
-```bash
-python3 recover.py enc.nppp ref.JPG out.jpg --no-auto \
-    --ref-prefix 153605 --mcu-size 16
-```
-
-### Skip Half-Swap (composition already correct)
-
-```bash
-python3 recover.py enc.nppp ref.JPG out.jpg --no-swap
-```
-
----
-
-## ⚙️ Parameters Reference
+#### Crop Parameters Group
 
 | Parameter | Default | Description |
 |---|---|---|
-| `--ref-prefix` | auto | Reference warm-up bytes (`153605` or `5242880`) |
-| `--crop-top` | `424` | Pixels to crop from top (reference bleed) |
-| `--crop-bottom` | `60` | Pixels to crop from bottom (white EOF fill) |
-| `--shift` | `8` | Left-half downward shift (use `0` to skip) |
-| `--right-seam` | auto | Manual right seam column |
-| `--top-scanlines` | `1` | MCU scanlines to crop from top |
-| `--mcu-size` | auto | `8` (4:4:4) or `16` (4:2:0/4:2:2) |
-| `--no-swap` | off | Skip the half-swap step |
-| `--no-auto` | off | Disable auto-detection |
-| `--wb-low` | `0.05` | White-balance low percentile |
-| `--wb-high` | `99.95` | White-balance high percentile |
-| `--clarity` | `0.35` | Midtone contrast strength (0.0–1.0) |
-| `--saturation` | `1.10` | Saturation factor (1.0 = no change) |
-| `--quality` | `95` | Output JPEG quality |
+| **Ref prefix** | `153605` | Bytes of reference used as decoder warm-up |
+| **Crop top** | `424` | Pixels to remove from top (reference bleed) |
+| **Crop bottom** | `60` | Pixels to remove from bottom (white EOF fill) |
+| **Left-half shift** | `8` | Vertical alignment shift in pixels |
+| **MCU size** | `8` | `8` for 4:4:4, `16` for 4:2:0 / 4:2:2 |
+| **Top scanlines** | `1` | MCU rows to crop from top |
+| **Right seam** | `0` (Auto) | Manual column override for right crop |
 
-### MCU Size Selection Guide
+#### Color Correction Group
+
+| Parameter | Default | Description |
+|---|---|---|
+| **WB low percentile** | `0.05` | Lower clip for white balance |
+| **WB high percentile** | `99.95` | Upper clip for white balance |
+| **Clarity strength** | `0.35` | Midtone contrast (0.0–1.0) |
+| **Saturation** | `1.10` | Color boost (1.0 = no change) |
+| **JPEG quality** | `95` | Output quality |
+
+### Preview / Log / Batch Tabs (right)
+
+- **Preview** — Side-by-side reference and output images
+- **Log** — Live pipeline progress (auto-scrolls)
+- **Batch** — Folder-based batch processing
+
+### Bottom Bar
+
+- **▶ Run Recovery** — Start the pipeline
+- **Progress bar** — Shows 0–100% completion
+
+### Toolbar
+
+- **Load Batch Folder** — Quick access to batch mode
+- **Clear Log** — Wipes the log panel
+
+---
+
+## ⚙️ Parameter Reference
+
+### MCU Size Selection
 
 | Chroma Subsampling | MCU Size | Typical Cameras |
 |---|---|---|
-| **4:4:4** (no subsampling) | 8 | Higher-end compacts, some DSLRs |
-| **4:2:2** (horizontal) | 16 | Canon DSLRs (default JPEG) |
-| **4:2:0** (both axes) | 16 | Most phones, consumer cameras |
+| **4:4:4** | 8 | Higher-end compacts, some DSLRs |
+| **4:2:2** | 16 | Canon DSLRs (default JPEG) |
+| **4:2:0** | 16 | Most phones, consumer cameras |
+
+**Auto-detect** parses the reference's SOF marker to determine this. If auto-detect fails, set manually.
+
+### Encrypted Region Size
+
+| File size | Bytes encrypted (ref prefix) |
+|---|---|
+| **< 50 MB** | `153605` |
+| **≥ 50 MB** | `5242880` |
+
+### Crop Tuning Guide
+
+| Camera / Resolution | Typical crop-top | Typical shift |
+|---|---|---|
+| 3888×2592 (4:4:4) | 400–500 | 8 |
+| 6000×4000 (4:2:2) | 550–700 | 16 |
+| 4000×3000 (4:2:0) | 400–600 | 16 |
+
+If reference content still bleeds at the top after running, **increase crop-top by 50–100** and retry.
 
 ---
 
-## 🔬 Pipeline Explained
+## 🔄 Batch Mode
 
-### Step 1–2: Splice and Decode
+### Via GUI
 
-```
-[reference 0:153605] + [encrypted 153605:end]
-```
+1. Click the **Batch** tab
+2. Click **Browse...** and select the folder containing `.nppp` files
+3. Ensure the **Reference** field in the Files section is filled
+4. Click **Run Batch**
+5. Output goes to `[folder]/recovered/`
 
-Reference bytes warm up the decoder. Encrypted file's surviving data supplies the actual content.
-
-### Step 3: Half-Swap
-
-Some cameras produce decoded output where left/right halves are swapped. This step restores correct composition.
-
-### Step 4: Left-Half Shift
-
-The left half may be off by exactly one MCU (8 or 16 px). Shifting it down aligns the horizontal seam.
-
-### Step 5: Right Seam Crop
-
-Auto-detects the vertical column where reference content meets recovered content, then crops just past it.
-
-### Step 5.5: Top Scanline Crop
-
-Removes one MCU row from top to eliminate residual bleed.
-
-### Step 6: PhotoDemon-Style Auto-Correct
-
-1. **White Balance** — independent per-channel percentile stretch (0.05% clip)
-2. **Clarity** — midtone contrast S-curve via LUT
-3. **Saturation** — mild boost (1.10×)
-
----
-
-## 🎯 Auto-Detection
-
-The script auto-detects two critical parameters:
-
-### `ref_prefix` — based on file size
-
-```python
-size = os.path.getsize(encrypted_path)
-ref_prefix = 153605 if size < 50*1024*1024 else 5242880
-```
-
-### `mcu_size` — from reference JPEG's SOF marker
-
-Parses the Start-Of-Frame marker to extract chroma subsampling factors:
-
-```
-Component 1: H=2 V=1  → hmax=2, vmax=1 → MCU = 16×16 (4:2:2)
-Component 1: H=2 V=2  → hmax=2, vmax=2 → MCU = 16×16 (4:2:0)
-Component 1: H=1 V=1  → hmax=1, vmax=1 → MCU = 8×8  (4:4:4)
-```
-
----
-
-## 🔄 Batch Processing
-
-### Bash Loop
+### Via CLI (equivalent)
 
 ```bash
-#!/bin/bash
-REF="reference.JPG"
 mkdir -p recovered
-
 for enc in *.JPG.nppp; do
     base="${enc%.nppp}"
-    echo "=== $enc ==="
-    python3 recover.py "$enc" "$REF" "recovered/${base}_RECOVERED.jpg"
+    python3 recover_gui.py --cli "$enc" reference.JPG "recovered/${base}_RECOVERED.jpg"
 done
-
-ls -la recovered/
 ```
 
-### Parallel (faster for many files)
+*(The GUI has no CLI mode, but `recover.py` from the CLI version works fine for scripts.)*
 
-```bash
-ls *.JPG.nppp | xargs -P 4 -I {} bash -c '
-    enc="{}"
-    base="${enc%.nppp}"
-    python3 recover.py "$enc" reference.JPG "recovered/${base}.jpg"
-'
+---
+
+## 🧠 How It Works
+
+STOP/Djvu encrypts files with a **fixed-size prefix**:
+
+```
+[encrypted: bytes 0..153605]  [untouched scan data: 153605..end]
 ```
 
-### With Per-File Parameters
+The encrypted region contains:
+- The JPEG header tables (Huffman, quantization)
+- The first ~150 KB of scan data (top portion of image)
 
-```bash
-# Different crops for different files
-python3 recover.py IMG_4054.JPG.nppp ref.JPG out1.jpg --crop-right 2590
-python3 recover.py IMG_4055.JPG.nppp ref.JPG out2.jpg --crop-right 4500
-python3 recover.py IMG_4056.JPG.nppp ref.JPG out3.jpg --crop-right 4650
-python3 recover.py IMG_4057.JPG.nppp ref.JPG out4.jpg --crop-left 850
-```
+Because JPEG decoding is **stateful**, we can't just start reading mid-stream. Solution:
+
+1. **Splice** — Reference file's first 153,605 bytes + encrypted file's surviving data
+2. **Decode** — JPEG decoder warms up on reference, then continues into your data
+3. **Crop** — Remove reference bleed at top, white fill at bottom
+4. **Align** — Half-swap + shift to match composition
+5. **Color correct** — Percentile WB + clarity S-curve + saturation
+
+**Result:** A viewable JPEG containing the majority of your original photo, minus the top portion.
 
 ---
 
 ## 🐛 Troubleshooting
 
+### GUI won't start
+
+```bash
+python3 -c "from PyQt6.QtWidgets import QApplication; print('PyQt6 OK')"
+```
+
+If it fails:
+```bash
+pip install --force-reinstall PyQt6
+```
+
+### `qt.qpa.plugin: Could not load the Qt platform plugin`
+
+```bash
+sudo apt install libxcb-cursor0 libxcb-xinerama0
+# or
+export QT_QPA_PLATFORM=xcb
+```
+
 ### `UnidentifiedImageError: cannot identify image file`
 
-**Causes:**
-- Wrong `--ref-prefix` — try `100000`, `150000`, `155000`
+- Wrong `ref_prefix` — try `100000`, `150000`, `155000`
 - Wrong reference — must be same camera
-- File ≥ 50 MB — use `--ref-prefix 5242880`
+- File ≥ 50 MB — enable larger ref_prefix (`5242880`)
 
-**Fix:**
-```bash
-python3 recover.py enc.nppp ref.jpg out.jpg --ref-prefix 155000
-```
+### Image is too dark / has color cast
 
-### `JPEG datastream contains no image`
+- Lower **Clarity** to `0.2` for a flatter look
+- Set **Saturation** to `1.0` for no boost
+- Lower **WB high** to `99.5` for cooler result
+- Raise **WB low** to `0.5` for stronger white balance
 
-The splice didn't decode. Increase `--ref-prefix` to give the decoder more warm-up.
+### Horizontal seam (left↔right misaligned)
 
-### Visible Horizontal Seam
+- Adjust **Left-half shift**: try `0`, `4`, `8`, `16`, `24`
 
-The left/right halves are misaligned vertically.
+### Reference content still visible
 
-**Fix:** Adjust `--shift` (try `0`, `4`, `8`, `16`, `24`)
+- Right side → increase **crop-right** manually (set **Right seam**)
+- Left side → rerun with lower **crop-left** (modify `recover_gui.py`)
 
-### Visible Vertical Seam
+### Worker thread crashes
 
-Reference content bleeding in from left or right.
-
-**Fix:**
-- Right bleed → increase `--right-seam` value
-- Left bleed → modify script to add `--crop-left` (see manual crop section)
-
-### Too Dark / Wrong Color
-
-- Reduce `--clarity` to `0.2` for flatter look
-- Set `--saturation 1.0` for no saturation change
-- Lower `--wb-high` to `99.5` for cooler result
-- Raise `--wb-low` to `0.5` for more aggressive WB
-
-### Reference Content Still Visible
-
-Manually crop it off with PIL:
-
-```python
-from PIL import Image
-im = Image.open("output.jpg")
-im = im.crop((left_crop, top_crop, right_crop, bottom_crop))
-im.save("output_cropped.jpg", quality=95)
-```
-
-Find the crop coordinates visually with markers:
-
-```python
-from PIL import Image, ImageDraw
-im = Image.open("output.jpg")
-draw = ImageDraw.Draw(im)
-for col in range(0, im.width, 500):
-    draw.line([(col, 0), (col, 60)], fill=(255,0,0), width=6)
-    draw.text((col+8, 15), str(col), fill=(255,0,0))
-im.save("marked.jpg", quality=90)
-```
+The **Log** tab shows the full traceback. Common causes:
+- Reference JPEG is corrupt
+- Output path is not writable
+- File is not a STOP/Djvu-encrypted JPEG
 
 ---
 
@@ -348,81 +327,41 @@ im.save("marked.jpg", quality=90)
 | Case | Works? | Notes |
 |---|---|---|
 | STOP/Djvu JPEG (`.nppp`, `.djvu`, `.gero`, `.nnuz`) | ✅ | Same-camera reference required |
-| STOP/Djvu < 50 MB | ✅ | `--ref-prefix 153605` |
-| STOP/Djvu ≥ 50 MB | ✅ | `--ref-prefix 5242880` |
+| STOP/Djvu < 50 MB | ✅ | `ref_prefix = 153605` |
+| STOP/Djvu ≥ 50 MB | ✅ | `ref_prefix = 5242880` |
 | STOP/Djvu PNG / RAW / HEIC | ❌ | Not JPEG format |
-| Non-STOP ransomware (LockBit, Conti, etc.) | ❌ | Different crypto scheme |
+| Other ransomware (LockBit, Conti, etc.) | ❌ | Different crypto scheme |
 | Camera-deleted JPEG (no ransomware) | ✅ | Use `photorec` / `testdisk` instead |
 
 ---
 
 ## 📚 Case Studies
 
-### Case 1: `_NHL0591.JPG.nppp` — Canon 3888×2592, 4:4:4
+### Case 1 — Canon 3888×2592 (4:4:4)
 
-**Setup:**
 | Parameter | Value |
 |---|---|
-| Encrypted size | 3.26 MB |
-| Reference | `_NHL0592.JPG` (portrait) |
-| MCU size | 8×8 (4:4:4) |
-
-**Command:**
-```bash
-python3 recover.py \
-    _NHL0591.JPG.nppp \
-    _NHL0592.JPG \
-    _NHL0591_RECOVERED.jpg
-```
+| Encrypted | `_NHL0591.JPG.nppp` (3.26 MB) |
+| Reference | `_NHL0592.JPG` |
+| MCU size | 8 (4:4:4) |
+| Crop top | 424 |
+| Crop bottom | 60 |
+| Shift | 8 |
 
 **Result:** 3570 × 2100 recovered image with correct color.
 
-### Case 2: `IMG_4054.JPG.nppp` — Canon 6000×4000, 4:2:2
+### Case 2 — Canon 6000×4000 (4:2:2)
 
-**Setup:**
 | Parameter | Value |
 |---|---|
-| Encrypted size | 11.26 MB |
-| Reference | `IMG_4312.JPG` (landscape) |
-| MCU size | 16×16 (4:2:2) |
+| Encrypted | `IMG_4054.JPG.nppp` (11.26 MB) |
+| Reference | `IMG_4312.JPG` |
+| MCU size | 16 (4:2:2) |
+| Crop top | 600 |
+| Crop bottom | 90 |
+| Shift | 16 |
 
-**Command:**
-```bash
-python3 recover.py \
-    IMG_4054.JPG.nppp \
-    IMG_4312.JPG \
-    IMG_4054_RECOVERED.jpg \
-    --mcu-size 16 \
-    --crop-top 600 \
-    --crop-bottom 90 \
-    --shift 16
-```
-
-**Note:** This case needed additional manual cropping because reference content bled into one side. See the `--crop-left`/`--crop-right` examples.
-
----
-
-## 🧪 Technical Background
-
-### Why 153,605 bytes?
-
-`0x25805` = 153,605. This is the exact byte count STOP/Djvu encrypts for files under 50 MB. Files ≥ 50 MB use `0x500000` = 5,242,880 bytes.
-
-### Why must the reference be same-camera?
-
-The JPEG file header contains **Huffman tables** and **quantization tables**. These must match between reference and encrypted file, or the scan data won't decode. Same-camera files share identical tables.
-
-### Why can't we just decrypt?
-
-STOP/Djvu encrypts file content with **Salsa20** using a per-file random key. That key is encrypted with the attacker's **RSA-2048** public key and appended to the file. Without the private key (held by the attacker), you can't reverse the RSA to get the Salsa20 key.
-
-### Why is the top of the image lost?
-
-The top portion of the JPEG was within the first 153,605 bytes — those pixels were overwritten by Salsa20 keystream. They are mathematically unrecoverable without decryption.
-
-### Why does the reference need to be a DIFFERENT photo?
-
-If the reference were the same photo as the encrypted file, the splice would produce the original — but the reference itself would have to be an unencrypted copy of the same file. That's a contradiction — if you had an unencrypted copy, you wouldn't need recovery.
+**Result:** Recovered with correct composition, needed manual right-edge crop because reference content bled into one side.
 
 ---
 
@@ -430,42 +369,50 @@ If the reference were the same photo as the encrypted file, the splice would pro
 
 If you've been infected with STOP/Djvu:
 
-1. **Disconnect** the infected machine from the network immediately
-2. **Do NOT pay** the ransom — paying does not guarantee recovery
-3. **Preserve** all `.nppp` files and `_readme.txt` notes
+1. **Disconnect** the infected machine from the network
+2. **Do NOT pay** the ransom — recovery is possible with the right approach
+3. **Preserve** all `.nppp` files and `_readme.txt`
 4. **Check `_readme.txt`** for the Personal ID — if it ends in `t1`, an offline key may exist
 5. **Run the official Emsisoft decryptor**: https://www.emsisoft.com/en/business/download/stop-djvu/
-6. **Scan the machine** with Malwarebytes or Emsisoft Emergency Kit
+6. **Scan** the machine with Malwarebytes or Emsisoft Emergency Kit
 7. **Change passwords** for all accounts accessed from the infected machine
 8. **Enable backups** (File History, Time Machine, cloud sync)
-9. **Keep encrypted originals** — if a key is released later, you can decrypt for a pixel-perfect copy
+9. **Keep encrypted originals** — for potential future decryption
 
 ---
 
-## 📁 Output Files
+## 🧪 Technical Background
 
-After recovery you should have:
+### Why 153,605 bytes?
 
-| File | Purpose |
-|---|---|
-| `output.jpg` | ✅ Recovered photo |
-| `encrypted.nppp` | 🔒 Encrypted original — **keep forever** |
-| `reference.JPG` | 🔒 Same-camera reference — keep if more files need recovery |
+`0x25805` = 153,605 — the exact byte count STOP/Djvu encrypts for files under 50 MB.
 
-**Keep the encrypted `.nppp` file indefinitely.** If Emsisoft releases a decryption key for your variant, you can decrypt it for a pixel-perfect original.
+### Why same-camera reference?
+
+JPEG headers contain **Huffman tables** and **quantization tables** specific to the camera model. These must match between reference and encrypted file, or scan data won't decode.
+
+### Why can't we decrypt directly?
+
+File content is encrypted with **Salsa20** using a per-file random key. That key is encrypted with the attacker's **RSA-2048** public key and appended to the file. Without the private key, RSA can't be reversed.
+
+### Why is the top of the image lost?
+
+The top portion of the JPEG was within the first 153,605 bytes — overwritten by the Salsa20 keystream. Mathematically unrecoverable without decryption.
 
 ---
 
-## 🎯 Summary
+## 📁 File Structure
 
-This tool provides a **practical recovery path** for STOP/Djvu-encrypted JPEG files when no decryption key is available. It's not a perfect solution — the top portion of each image is permanently lost — but it recovers the majority of your photos in a matter of seconds.
-
-**Key takeaways:**
-
-- Same-camera reference is **mandatory**
-- Faster than waiting for a decryption key
-- Works for any JPEG encrypted by STOP/Djvu
-- No network access required (runs fully offline)
+```
+~/Pictures/
+├── recover_gui.py          # GUI application (main file)
+├── recover.py              # CLI version (optional)
+├── requirements.txt        # Python dependencies
+├── README.md               # This file
+├── _NHL0591.JPG.nppp       # Encrypted original — keep forever
+├── _NHL0592.JPG            # Reference
+└── recovered/              # Batch output folder
+```
 
 ---
 
@@ -473,6 +420,7 @@ This tool provides a **practical recovery path** for STOP/Djvu-encrypted JPEG fi
 
 - **Emsisoft** — public STOP/Djvu research and decryptor tools
 - **PhotoDemon** — auto-correct algorithm inspiration
+- **Qt / PyQt6** — GUI framework
 - **JPEG-Repair-Tool community** — MCU repair techniques
 
 ---
@@ -490,4 +438,4 @@ If this tool helps you recover files:
 1. **Back up** your recovered images immediately
 2. **Report** your case to Emsisoft for future decryption research
 3. **Share** the tool with others facing similar infections
-4. **Do not pay** the ransom — recovery is possible with the right approach
+4. **Do not pay** the ransom — recovery is possible
